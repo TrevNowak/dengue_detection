@@ -55,23 +55,21 @@ df_final = df_merged.dropna()
 df_final = df_final.sort_values(by="Week")
 
 
-baseline_weeks = 7   # how many past weeks to consider
-z_threshold = 0.8    # standard deviation threshold
-min_case_threshold = 100  # optional: avoid triggering on low base levels
+baseline_weeks = 7   #7 past weeks to consider
+z_threshold = 0.8    #std dev threshold
+min_case_threshold = 100  #To avoid triggering on low base levels
 
-# --- Rolling Trimmed Mean and Std Dev ---
+#Rolling Trimmed Mean and Std Dev
 df_final["Mean_Past_Cases"] = df_final["dengue_total"].rolling(baseline_weeks).apply(
     lambda x: trim_mean(x, 0.1), raw=True)
 df_final["Std_Past_Cases"] = df_final["dengue_total"].rolling(baseline_weeks).std()
 
-# --- Handle zero/std edge cases ---
 mean_std = df_final["Std_Past_Cases"].mean()
 df_final["Std_Past_Cases"] = df_final["Std_Past_Cases"].replace(0, np.nan).fillna(mean_std)
 
-# --- Z-Score Calculation ---
+#Z-Score
 df_final["Z_Score"] = (df_final["dengue_total"] - df_final["Mean_Past_Cases"]) / df_final["Std_Past_Cases"]
 
-# --- Flag Outbreaks Based on Z-score + Cases ---
 df_final["EARS_Outbreak"] = df_final.apply(
     lambda row: "Yes" if row["Z_Score"] > z_threshold and row["dengue_total"] > min_case_threshold else "No", axis=1)
 
@@ -83,10 +81,10 @@ plt.scatter(df_final[df_final["EARS_Outbreak"] == "Yes"]["Week"],
             color="blue", label="EARS Outbreaks", zorder=3, s=40)
 plt.xlabel("Week")
 plt.ylabel("Dengue Cases")
-plt.title("EARS-Based Dengue Outbreak Detection (Real Data)")
+plt.title("EARS-Based Dengue Outbreak Detection (Real Dengue Data)")
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-print("✅ Total Outbreaks Detected by EARS:", df_final["EARS_Outbreak"].value_counts())
+print("Total Outbreaks Detected by EARS:", df_final["EARS_Outbreak"].value_counts())
 print(df_final[df_final["EARS_Outbreak"] == "Yes"][["Week", "dengue_total", "Z_Score"]])
