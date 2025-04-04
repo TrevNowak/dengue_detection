@@ -1,11 +1,12 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 import statsmodels.api as sm
 from meteostat import Daily, Stations
 from datetime import datetime
-from sklearn.metrics import root_mean_squared_error, mean_absolute_error
-import matplotlib.pyplot as plt
-
 
 df = pd.read_csv("data/dengue_data_sg.csv")
 filtered_df = df[df['T_res'].str.contains('Week')]
@@ -21,6 +22,7 @@ cols_to_drop = [
     'UUID'
 ]
 df_cleaned = filtered_df.drop(columns=cols_to_drop)
+
 start = datetime(2001, 12, 30)
 end = datetime(2022, 12, 24)
 
@@ -54,43 +56,13 @@ weekly_weather['Week'] = pd.to_datetime(weekly_weather['Week'])
 # Step 2: Merge on Week
 df_merged = pd.merge(df_cleaned, weekly_weather, on='Week', how='left')
 
+# Step 3: Drop duplicate or unnecessary columns if needed
+# Example: df_merged.drop(columns=['calendar_start_date', 'calendar_end_date'], inplace=True)
+
+# Step 4: Preview
 df_merged["Rainfall_mm_lag1"] = df_merged["Rainfall_mm"].shift(1)
 df_merged["Rainfall_mm_lag2"] = df_merged["Rainfall_mm"].shift(2)
 df_merged["Rainfall_mm_lag3"] = df_merged["Rainfall_mm"].shift(3)
 
-df_final = df_merged.dropna()
-train_df = df_final[df_final["Week"] < "2019-01-01"]
-test_df = df_final[df_final["Week"] >= "2019-01-01"]
-
-# Prepare X and y
-features = [
-    "Rainfall_mm_lag1", "Rainfall_mm_lag2", "Rainfall_mm_lag3",
-    "Temperature_C", "Seasonality"
-]
-
-X_train = sm.add_constant(train_df[features].astype(float))
-y_train = train_df["dengue_total"].astype(float)
-
-X_test = sm.add_constant(test_df[features].astype(float))
-y_test = test_df["dengue_total"].astype(float)
-
-# Train on training set
-model = sm.GLM(y_train, X_train, family=sm.families.NegativeBinomial())
-result = model.fit()
-test_df["Predicted_Cases"] = result.predict(X_test)
-
-rmse = root_mean_squared_error(y_test, test_df["Predicted_Cases"])
-mae = mean_absolute_error(y_test, test_df["Predicted_Cases"])
-
-print(f"RMSE: {rmse:.2f}")
-print(f"MAE: {mae:.2f}")
-
-plt.figure(figsize=(12, 5))
-plt.plot(test_df["Week"], y_test, label="Actual", color="red")
-plt.plot(test_df["Week"], test_df["Predicted_Cases"], label="Predicted", color="blue")
-plt.title("Test Set: Actual vs Predicted Dengue Cases")
-plt.xlabel("Week")
-plt.ylabel("Cases")
-plt.legend()
-plt.tight_layout()
-plt.show()
+print(df_merged.head())
+print(df_merged.columns.tolist())
