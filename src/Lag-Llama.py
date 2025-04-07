@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from meteostat import Daily
 
+#Data Prep
 df = pd.read_csv("data/dengue_data_sg.csv")
 filtered_df = df[df['T_res'].str.contains('Week')]
 cols_to_drop = [
@@ -39,33 +40,25 @@ weekly_weather = daily.resample('W-SUN').agg({
 }).reset_index()
 
 weekly_weather.columns = ['Week', 'Temperature_C', 'Rainfall_mm']
-
 weekly_weather["Week_Num"] = weekly_weather["Week"].dt.isocalendar().week
 weekly_weather["Seasonality"] = np.sin(2 * np.pi * weekly_weather["Week_Num"] / 52)
 
 df_cleaned['Week'] = pd.to_datetime(df_cleaned['calendar_start_date'])
 weekly_weather['Week'] = pd.to_datetime(weekly_weather['Week'])
-
-#Merge on Week
 df_merged = pd.merge(df_cleaned, weekly_weather, on='Week', how='left')
+
 #Add lagged features
 df_merged["Rainfall_mm_lag1"] = df_merged["Rainfall_mm"].shift(1)
 df_merged["Rainfall_mm_lag2"] = df_merged["Rainfall_mm"].shift(2)
 df_merged["Rainfall_mm_lag3"] = df_merged["Rainfall_mm"].shift(3)
 df_final = df_merged.dropna()
 
-# === Scaling and Target Setup ===
 scaler = MinMaxScaler()
 df_numeric = df_final.select_dtypes(include=[np.number])
-
-# Define target column
 target_column = "dengue_total"
 target_index = df_numeric.columns.get_loc(target_column)
-
-# Scale
 scaled = scaler.fit_transform(df_numeric)
 
-# === Create sequences ===
 def create_sequences(data, seq_len=52):
     X, y = [], []
     for i in range(len(data) - seq_len):
@@ -78,7 +71,6 @@ train_size = int(0.8 * len(X))
 X_train, y_train = X[:train_size], y[:train_size]
 X_test, y_test = X[train_size:], y[train_size:]
 
-# === Transformer Model ===
 class SimpleTransformer(nn.Module):
     def __init__(self, input_dim, d_model=64, nhead=4, num_layers=2):
         super().__init__()
@@ -93,10 +85,9 @@ class SimpleTransformer(nn.Module):
         out = self.transformer(x)
         return self.fc(out[-1]).squeeze()
 
-# === Train ===
 model = SimpleTransformer(input_dim=X.shape[2])
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-criterion = nn.L1Loss()  # Use MAE loss instead of MSE
+criterion = nn.L1Loss()  #Use MAE loss for now instead of MSE (Slightly better results)
 
 for epoch in range(50):
     model.train()
@@ -108,7 +99,6 @@ for epoch in range(50):
     if epoch % 5 == 0:
         print(f"Epoch {epoch+1}: Train Loss = {loss.item():.4f}")
 
-# === Evaluate ===
 model.eval()
 with torch.no_grad():
     pred = model(X_test).numpy()
@@ -116,28 +106,24 @@ with torch.no_grad():
 
 features_count = scaled.shape[1]
 
-# Inverse scale
 pred_scaled = np.zeros((len(pred), features_count))
 pred_scaled[:, target_index] = pred.flatten()
 pred_cases = scaler.inverse_transform(pred_scaled)[:, target_index]
-
 true_scaled = np.zeros((len(true), features_count))
 true_scaled[:, target_index] = true.flatten()
 actual_cases = scaler.inverse_transform(true_scaled)[:, target_index]
 
-# Metrics
-mae = mean_absolute_error(actual_cases, pred_cases)
-rmse = np.sqrt(mean_squared_error(actual_cases, pred_cases))
+mae = mean_absolute_error(actual_cases, pred_cases) #MAE
+rmse = np.sqrt(mean_squared_error(actual_cases, pred_cases)) #RMSE
 print(f"MAE: {mae:.2f}, RMSE: {rmse:.2f}")
 
-# Outbreak Detection
+#Outbreak Detection
 residuals = actual_cases - pred_cases
 threshold = np.percentile(residuals, 95)
 anomalies = residuals > threshold
 
-# Plot
-weeks = df_final["Week"].iloc[-len(actual_cases):]
 
+weeks = df_final["Week"].iloc[-len(actual_cases):]
 plt.figure(figsize=(14, 5))
 plt.plot(weeks, actual_cases, label="Actual Cases", linewidth=2)
 plt.plot(weeks, pred_cases, label="Predicted Cases", linewidth=2)
