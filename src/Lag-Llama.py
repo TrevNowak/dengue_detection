@@ -55,8 +55,8 @@ df_final = df_merged.dropna()
 
 scaler = MinMaxScaler()
 df_numeric = df_final.select_dtypes(include=[np.number])
-target_column = "dengue_total"
-target_index = df_numeric.columns.get_loc(target_column)
+t_column = "dengue_total"
+target_index = df_numeric.columns.get_loc(t_column)
 scaled = scaler.fit_transform(df_numeric)
 
 def create_sequences(data, seq_len=52):
